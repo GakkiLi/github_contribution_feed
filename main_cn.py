@@ -6,16 +6,15 @@ run.py  —— 单仓库多年份贡献图（1 月 1 日起始）
 
 import os
 import sys
-import random
 import shutil
 import subprocess
 import logging
 import calendar
 from datetime import datetime, timedelta
 
+from contribution_pattern import LEVELS, generate_pattern, validate_calendar_range
+
 REPO_NAME = "contribution_art"          # 固定仓库名
-WEIGHTS = (30, 20, 15, 15, 5)         # 0-4 权重
-LEVELS = {"0": 0, "1": 1, "2": 5, "3": 10, "4": 20}
 
 # ------------------ 工具 ------------------
 def ask(prompt, default=None, cast=str):
@@ -44,16 +43,11 @@ def is_git_repo(path):
     return run_cmd("git rev-parse --is-inside-work-tree", path)
 
 # ------------------ 核心 ------------------
-def generate_pattern(days):
-    """生成长度为 days 的随机级别序列 0-4"""
-    rng = random.SystemRandom()
-    population = [0, 1, 2, 3, 4]
-    return rng.choices(population, weights=WEIGHTS, k=days)
-
 def build_year_in_repo(year, repo_path, user_name, user_email):
     """为某一年追加 commit（1 月 1 日开始）"""
     days = 366 if calendar.isleap(year) else 365
-    pattern = generate_pattern(days)
+    start_date = datetime(year, 1, 1)
+    pattern = generate_pattern(start_date.date(), days)
 
     readme_path = os.path.join(repo_path, "README.md")
     counter = 0
@@ -62,8 +56,6 @@ def build_year_in_repo(year, repo_path, user_name, user_email):
         with open(readme_path, encoding="utf-8") as f:
             m = re.findall(r"Commit #(\d+)", f.read())
             counter = int(m[-1]) if m else 0
-
-    start_date = datetime(year, 1, 1)
 
     for idx, level in enumerate(pattern, 1):
         commits = LEVELS.get(str(level), 0)
@@ -117,9 +109,15 @@ def main():
         print("\033[31m请重新启动脚本\033[0m")
         sys.exit(1)
 
-    
-
-    
+    try:
+        validate_calendar_range(datetime(start_year, 1, 1).date(),
+                                datetime(end_year, 12, 31).date())
+    except NotImplementedError as error:
+        logging.error(f"中国大陆节假日日历不支持所选范围：{error}。"
+                      "请运行 python -m pip install --upgrade -r requirements.txt；"
+                      "若仍不支持，请缩小范围或等待日历更新。")
+        sys.exit(1)
+    logging.info("使用中国大陆日历（含调休补班）；休息日 90% 不提交，10% 提交 1 次。")
 
     repo_path = os.path.abspath(REPO_NAME)
 

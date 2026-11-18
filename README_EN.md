@@ -14,6 +14,7 @@ This is a lightweight command-line tool that can **fill in missing GitHub contri
 **Highlights:**
 - Operates on **a single repository only**, and the script automatically performs a `git pull` on that repo before running  
 - Starts **January 1st of every year**, commits once per real calendar day (365/366 days), automatically detects leap years  
+- All four scripts recognize mainland China holidays, weekends, and makeup workdays, with reduced activity on rest days.
 - Use `main_month.py` (English) or `main_month_cn.py` (Chinese) for a month range, with a push after each month. Empty months are not pushed, and a failed push stops subsequent months.
 - Supports multiple runs and incremental appends (it never overwrites existing history)  
 - **No temporary files** at any stage, minimizing disk I/O
@@ -26,6 +27,7 @@ This is a lightweight command-line tool that can **fill in missing GitHub contri
 
 - Python ≥ 3.7  
 - Git is installed locally and the `git` command is available in your shell  
+- Install the holiday calendar dependency: `python -m pip install -r requirements.txt`.
 
 ### 1️⃣ Download the script
 ```bash
@@ -66,16 +68,25 @@ Enter your Git username, Git email, start month (YYYYMM), end month (YYYYMM), an
 For example, `202312` through `202402` generates only December 2023, January 2024, and February 2024. Both endpoint months are included. Use the same value for both boundaries, such as `202402`, to generate just one month.
 
 - Enter exactly six digits, with a month from `01` to `12`, a year of at least 2008, and a start month no later than the end month.
-- Daily random commit generation is unchanged. Each completed month is pushed separately; a failed push stops subsequent months.
+- Daily commits follow the workday/rest-day rules below. Each completed month is pushed separately; a failed push stops subsequent months.
 - Re-running the same range appends more commits. It does not skip existing dates or guarantee that previously missing contributions will appear.
 - All four scripts share the current directory's `contribution_art` repository. An existing repository keeps its configured `origin` and Git identity; entering a new URL or email does not replace them.
 - The original `main.py` and `main_cn.py` retain their year-based inputs.
+
+#### Workdays and rest days
+
+- All four scripts use the mainland China calendar from [chinesecalendar](https://pypi.org/project/chinesecalendar/), regardless of the prompt language.
+- Regular and makeup workdays retain the original distribution: `0, 1, 5, 10, 20` commits with weights `30, 20, 15, 15, 5`.
+- Weekends (excluding makeup workdays) and holiday breaks have a **90% chance of no commits and a 10% chance of one commit** per day. These are probabilities, not guaranteed percentages within each short range.
+- Calendar coverage depends on the installed dependency and officially published schedules. The entire requested range is checked before initializing, pulling, or modifying the repository. Unsupported dates cause an explicit error, not a weekends-only fallback.
+- To update coverage, run `python -m pip install --upgrade -r requirements.txt`. If the range is still unsupported, shorten it or wait for a calendar update.
+- These rules affect newly generated commits only; existing history is not removed or reduced.
 
 ### 4️⃣ Wait for the script to finish  
 
 Since the script needs to repeatedly call `git commit` to fabricate the commit history, you will have to wait for a while (the waiting time is proportional to the length of the chosen year range).  
 
-(If the long runtime makes you worry about security: the entire script is stored in **one single file** containing only **164 lines**, so you can quickly review it at any time—it is **absolutely safe**.)  
+Before running, you can review the four entry scripts and the shared `contribution_pattern.py` module, which contains contribution-pattern generation and calendar checks.
 
 When the script finishes, your profile page will be filled with large blocks of green squares!  
 ![Show](./picture/target_show.png)

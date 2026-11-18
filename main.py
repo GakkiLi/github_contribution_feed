@@ -8,16 +8,15 @@ run.py  —— Single-repo multi-year contribution graph (Jan 1 start)
 
 import os
 import sys
-import random
 import shutil
 import subprocess
 import logging
 import calendar
 from datetime import datetime, timedelta
 
+from contribution_pattern import LEVELS, generate_pattern, validate_calendar_range
+
 REPO_NAME = "contribution_art"
-WEIGHTS = (30, 20, 15, 15, 5)
-LEVELS = {"0": 0, "1": 1, "2": 5, "3": 10, "4": 20}
 
 # ------------------ utilities ------------------
 def ask(prompt, default=None, cast=str):
@@ -46,16 +45,11 @@ def is_git_repo(path):
     return run_cmd("git rev-parse --is-inside-work-tree", path)
 
 # ------------------ core ------------------
-def generate_pattern(days):
-    """Generate a random level sequence 0-4 of length 'days'"""
-    rng = random.SystemRandom()
-    population = [0, 1, 2, 3, 4]
-    return rng.choices(population, weights=WEIGHTS, k=days)
-
 def build_year_in_repo(year, repo_path, user_name, user_email):
     """Append commits for a given year (starting Jan 1)"""
     days = 366 if calendar.isleap(year) else 365
-    pattern = generate_pattern(days)
+    start_date = datetime(year, 1, 1)
+    pattern = generate_pattern(start_date.date(), days)
 
     readme_path = os.path.join(repo_path, "README.md")
     counter = 0
@@ -64,8 +58,6 @@ def build_year_in_repo(year, repo_path, user_name, user_email):
         with open(readme_path, encoding="utf-8") as f:
             m = re.findall(r"Commit #(\d+)", f.read())
             counter = int(m[-1]) if m else 0
-
-    start_date = datetime(year, 1, 1)
 
     for idx, level in enumerate(pattern, 1):
         commits = LEVELS.get(str(level), 0)
@@ -116,6 +108,17 @@ def main():
         print("\033[31m⚠️  GitHub was founded in 2008. "
               "Faking contributions before 2008 may get your account suspended!\033[0m")
         sys.exit(1)
+
+    try:
+        validate_calendar_range(datetime(start_year, 1, 1).date(),
+                                datetime(end_year, 12, 31).date())
+    except NotImplementedError as error:
+        logging.error(f"Mainland China holiday calendar does not cover this range: {error}. "
+                      "Run python -m pip install --upgrade -r requirements.txt; "
+                      "if still unsupported, shorten the range or wait for a calendar update.")
+        sys.exit(1)
+    logging.info("Using mainland China calendar (including makeup workdays); "
+                 "rest days: 90% no commits, 10% one commit.")
 
     repo_path = os.path.abspath(REPO_NAME)
 

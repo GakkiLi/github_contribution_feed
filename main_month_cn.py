@@ -6,15 +6,14 @@
 
 import os
 import sys
-import random
 import subprocess
 import logging
 import calendar
 from datetime import datetime, timedelta
 
+from contribution_pattern import LEVELS, generate_pattern, validate_calendar_range
+
 REPO_NAME = "contribution_art"
-WEIGHTS = (30, 20, 15, 15, 5)
-LEVELS = {"0": 0, "1": 1, "2": 5, "3": 10, "4": 20}
 
 
 def ask(prompt, default=None, cast=str):
@@ -51,14 +50,10 @@ def is_git_repo(path):
     return run_cmd("git rev-parse --is-inside-work-tree", path)
 
 
-def generate_pattern(days):
-    rng = random.SystemRandom()
-    return rng.choices([0, 1, 2, 3, 4], weights=WEIGHTS, k=days)
-
-
 def build_month_in_repo(year, month, repo_path, user_name, user_email, push_monthly=False):
     days = calendar.monthrange(year, month)[1]
-    pattern = generate_pattern(days)
+    start_date = datetime(year, month, 1)
+    pattern = generate_pattern(start_date.date(), days)
     readme_path = os.path.join(repo_path, "README.md")
     counter = 0
     if os.path.isfile(readme_path):
@@ -68,7 +63,6 @@ def build_month_in_repo(year, month, repo_path, user_name, user_email, push_mont
             counter = int(matches[-1]) if matches else 0
 
     initial_counter = counter
-    start_date = datetime(year, month, 1)
     for day_index, level in enumerate(pattern, 1):
         commits = LEVELS.get(str(level), 0)
         current_date = start_date + timedelta(days=day_index - 1)
@@ -117,6 +111,16 @@ def main():
     if start_month.year < 2008 or end_month.year < 2008:
         print("\033[31m年份不可早于 2008 年！\033[0m")
         sys.exit(1)
+
+    end_date = end_month.replace(day=calendar.monthrange(end_month.year, end_month.month)[1])
+    try:
+        validate_calendar_range(start_month.date(), end_date.date())
+    except NotImplementedError as error:
+        logging.error(f"中国大陆节假日日历不支持所选范围：{error}。"
+                      "请运行 python -m pip install --upgrade -r requirements.txt；"
+                      "若仍不支持，请缩小范围或等待日历更新。")
+        sys.exit(1)
+    logging.info("使用中国大陆日历（含调休补班）；休息日 90% 不提交，10% 提交 1 次。")
 
     repo_path = os.path.abspath(REPO_NAME)
     if os.path.exists(repo_path):

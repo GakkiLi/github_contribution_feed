@@ -6,15 +6,14 @@ Single-repository contribution graph for a month range.
 
 import os
 import sys
-import random
 import subprocess
 import logging
 import calendar
 from datetime import datetime, timedelta
 
+from contribution_pattern import LEVELS, generate_pattern, validate_calendar_range
+
 REPO_NAME = "contribution_art"
-WEIGHTS = (30, 20, 15, 15, 5)
-LEVELS = {"0": 0, "1": 1, "2": 5, "3": 10, "4": 20}
 
 
 def ask(prompt, default=None, cast=str):
@@ -51,14 +50,10 @@ def is_git_repo(path):
     return run_cmd("git rev-parse --is-inside-work-tree", path)
 
 
-def generate_pattern(days):
-    rng = random.SystemRandom()
-    return rng.choices([0, 1, 2, 3, 4], weights=WEIGHTS, k=days)
-
-
 def build_month_in_repo(year, month, repo_path, user_name, user_email, push_monthly=False):
     days = calendar.monthrange(year, month)[1]
-    pattern = generate_pattern(days)
+    start_date = datetime(year, month, 1)
+    pattern = generate_pattern(start_date.date(), days)
     readme_path = os.path.join(repo_path, "README.md")
     counter = 0
     if os.path.isfile(readme_path):
@@ -68,7 +63,6 @@ def build_month_in_repo(year, month, repo_path, user_name, user_email, push_mont
             counter = int(matches[-1]) if matches else 0
 
     initial_counter = counter
-    start_date = datetime(year, month, 1)
     for day_index, level in enumerate(pattern, 1):
         commits = LEVELS.get(str(level), 0)
         current_date = start_date + timedelta(days=day_index - 1)
@@ -117,6 +111,17 @@ def main():
     if start_month.year < 2008 or end_month.year < 2008:
         print("\033[31mYears before 2008 are not supported!\033[0m")
         sys.exit(1)
+
+    end_date = end_month.replace(day=calendar.monthrange(end_month.year, end_month.month)[1])
+    try:
+        validate_calendar_range(start_month.date(), end_date.date())
+    except NotImplementedError as error:
+        logging.error(f"Mainland China holiday calendar does not cover this range: {error}. "
+                      "Run python -m pip install --upgrade -r requirements.txt; "
+                      "if still unsupported, shorten the range or wait for a calendar update.")
+        sys.exit(1)
+    logging.info("Using mainland China calendar (including makeup workdays); "
+                 "rest days: 90% no commits, 10% one commit.")
 
     repo_path = os.path.abspath(REPO_NAME)
     if os.path.exists(repo_path):
